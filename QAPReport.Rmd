@@ -1,0 +1,327 @@
+---
+title: "Qulitative Avtivity Prediction Report"
+author: "Andras Pap"
+date: "Sunday, June 22, 2014"
+output: html_document
+---
+
+
+#Abstract
+Qualitative Activity Recognition of Weight Lifting Exercises data was used to train three machine learning methods. Amongst of the 3 methods (CART, Random Forest, Stochastic Gradient Boosting) the Random Forest method proved to be the most reliable (most accurate) on the hold out sets and was used to predict the quality of technic on the test samples. The method correctly predicted all 20 of the tests.
+
+
+## Introduction
+Qualitative Activity Recognition of Weight Lifting Exercises data was used to train three machine learning methods. Data on movements of subjects during dumbell lifting exercises were provided together with the quality of their technic classifed into five categories A,B,C,D and E. Three machine learining algorithms were trained to obtain classification for 20 test data sets of movements.
+
+
+## Preliminary Data Analysis
+The dataset provided contains 160 variables, 159 possible predictors plus the 'classe' variable (quality of technic: A,B,C,D and E) in the training set and the 'problem_id' variable in the test set. The training set has 19622 instances while the test has 20. The 'problem_id' variable of the test was discarded since it has no relevance to the problem. To simplify applications of the machine learining algorithm I took the 57 numeric variables in the test set. More over 4 of these 57 variables removed since they contained NA values. The remaining 53 variables were used as predictors. Three machine learning algorithms were evaluated: CART, Random Forest and Stochastic Gradient Boosting. Due to time constraint random samples of 19622 instances were selected for training and the remainder of the 19622 instances were used as holdout. The following accuracies  were obtained(ratio of correctly predicted in the holdout samples to the total size of the hold out samples):
+
+<br>
+
+10 runs with 200 training samples each:
+
+<br>
+
+<center>
+<table border="1" cellpadding="6">
+  <tr align="center|center|center|center">
+    <th>Result</th>
+    <th>CART</th>
+    <th>Random Forest</th>
+    <th>Stoch. Gradient Boost</th>
+  </tr>
+  <tr align="center|center|center|center">
+    <td align="left">Mean Train</td>
+    <td align="center">0.568</td>
+    <td align="center">1</td>
+    <td align="center">1</td>     
+  </tr>
+  <tr align="center|center|center|center">
+    <td align="left">Std Train</td>
+    <td align="center">0.832</td>
+    <td align="center">0</td>
+    <td align="center">0</td>     
+  </tr> 
+  <tr align="center|center|center|center">
+    <td align="left">Mean Holdout</td>
+    <td align="center">0.451</td>
+    <td align="center">0.705</td>
+    <td align="center">0.692</td>     
+  </tr> 
+  <tr align="center|center|center|center">
+    <td align="left">Std Holdout</td>
+    <td align="center">0.0558</td>
+    <td align="center">0.0162</td>
+    <td align="center">0.0165</td>     
+  </tr>   
+</table> 
+</center>
+
+<br>
+
+20 runs with 400 training samples each:
+
+<br>
+
+<center>
+<table border="1" cellpadding="6">
+  <tr align="center|center|center|center">
+    <th>Result</th>
+    <th>CART</th>
+    <th>Random Forest</th>
+    <th>Stoch. Gradient Boost</th>
+  </tr>
+  <tr align="center|center|center|center">
+    <td align="left">Mean Train</td>
+    <td align="center">0.562</td>
+    <td align="center">1</td>
+    <td align="center">1</td>     
+  </tr>
+  <tr align="center|center|center|center">
+    <td align="left">Std Train</td>
+    <td align="center">0.618</td>
+    <td align="center">0</td>
+    <td align="center">0</td>     
+  </tr> 
+  <tr align="center|center|center|center">
+    <td align="left">Mean Holdout</td>
+    <td align="center">0.486</td>
+    <td align="center">0.813</td>
+    <td align="center">0.803</td>     
+  </tr> 
+  <tr align="center|center|center|center">
+    <td align="left">Std Holdout</td>
+    <td align="center">0.052</td>
+    <td align="center">0.0173</td>
+    <td align="center">0.0131</td>     
+  </tr>   
+</table> 
+</center>
+
+<br>
+
+The random forest and gradient boosting methods clearly have and advantage over CART. Following this result larger training samples were selected for the Random Forest and Stochastic Gradient Boosting methods for predictions of the 20 test cases.
+
+<br>
+
+```{r echo=FALSE, cache=TRUE}
+library(ggplot2)
+library(lattice)
+library(caret)
+
+# Function to read in the provided data
+readDataF <- function() {
+	# Read training data
+	train <- read.csv("pml-training.csv")
+	# Read test data
+	test <- read.csv("pml-testing.csv")
+	
+	return(list("train" = train,
+		    "test" = test))
+}
+
+# Function to preporcess the raw data
+preprocessDataF <- function(rawData) {	
+	#type1 
+	#indeces <- ".*_x$|.*_y$|.*_z$"
+	#type2 
+	#indeces <- "avg_|stddev_|.*_x$|.*_y$|.*_z$"
+	#type3 (List of columns suggested in the paper/dicussion forum)
+	#indeces <- "avg_roll_|stddev_roll_|max_|var_accel"
+	#type 4 all numeric	
+	#type 5 pca
+		
+	# Take only the numeric columns both in the train and test data
+	trainMovement <- rawData$train[, sapply(rawData$train, is.numeric)]
+	testMovement <- rawData$test[, sapply(rawData$test, is.numeric)]
+		
+	# Take only the columns wihtout na-s both in the test data
+	indecesTest <- colSums(is.na(testMovement)) == 0
+	testMovement <- testMovement[, indecesTest]
+	indecesTrain <- names(trainMovement) %in% names(testMovement)
+	trainMovement <- trainMovement[, indecesTrain]
+
+	# Remove other "meaningless" columns
+	trainMovement <- trainMovement[,5:ncol(trainMovement)]
+	testMovement <- testMovement[,5:ncol(testMovement)]
+	
+	# Add back the classe
+	trainMovement$classe <- rawData$train$classe
+	# Remove any rows with NA in them
+	trainMovementNoNA <- trainMovement[rowSums(is.na(trainMovement)) == 0,]	
+
+	return(list("train" = trainMovementNoNA,
+		    "test" = testMovement))
+}
+
+pcaDataF <- function(inputData, numOfComponents) {
+	# Take out the last column (the predicted value)
+	pcaResult <- prcomp(inputData[,-ncol(inputData)],scale=T)
+	# Take the required pca component and add back the predicted value
+	
+	result <- data.frame(cbind(pcaResult$x[,1:numOfComponents]))
+	result$classe <- inputData$classe
+	return(result)
+}
+
+# Validation set function
+# method_in: method like 'rpart', 'rf', 'gbm',...
+# train_in: training data
+# split_in: the percentage of the traing data to be used for training
+#           the rest is hold out
+validationSetF <- function(method_in, train_in, split_in) {
+	# method_in: rpart,rf,gbm
+	totalLength = length(train_in[,1])	
+	trainIndeces <- sample(1:totalLength,floor(totalLength * split_in))
+	
+	return (validationSetByIndeces(method_in, train_in, trainIndeces))
+}
+
+# Function for k-fold evaluation of a method plus prediction for the test data
+# method_in: method like 'rpart', 'rf', 'gbm',...
+# preprocData$train: training data
+# preprocData$test: test data
+kFoldF <- function(method_in, preprocData, K, foldSize = 0, isFoldLeaveout = true) {
+	totalLength = length(preprocData$train[,1])
+	if(0 == foldSize)
+		foldSize = floor(totalLength / K)
+
+	randomIndeces <- sample(1:totalLength,totalLength)
+	
+	acc <- data.frame(row.names = c(1:K))
+	acc$train <- c(1:K)
+	acc$holdout <- acc$train
+	testSize <- nrow(preprocData$test)
+	predictTest <- matrix(data = "G", nrow = K + 1, ncol = testSize)	
+	for (i in 1:K) {
+		foldBottom = (i-1)*foldSize+1
+		foldTop = i*foldSize
+		print(sprintf("Holdout fold: %d - %d", foldBottom,foldTop))
+		ithIndeces <- randomIndeces[!randomIndeces %in% c(foldBottom:foldTop)]
+		maxHoldout = 0
+		if(!isFoldLeaveout) {
+			ithIndeces <- randomIndeces[foldBottom:foldTop]
+			# Don't limit holdout
+			#maxHoldout <- testSize
+		}
+		ithResult <- validationSetByIndeces(method_in, preprocData$train, ithIndeces, maxHoldout)
+		acc$train[i] <- ithResult$accTrain
+		acc$holdout[i] <- ithResult$accHoldout
+		
+		predictTest[i,] <- as.character(predict(ithResult$modelFit,preprocData$test[,-length(preprocData$test)]))
+	}
+	predictTest[K + 1,] <- apply(predictTest, 2, function(charVector) {tmp = table(charVector); return(names(tmp[tmp == max(tmp)])[1]) } )
+	
+	return(list("acc" = acc,
+		    "predictTest" = data.frame(predictTest)))
+}
+
+# Worker function for validation set
+# method_in: method like 'rpart', 'rf', 'gbm',...
+# train_in: training data
+# trainIndeces: indeces set used to select data used for trainging (the rest is holdout)
+validationSetByIndeces <- function(method_in, train_in, trainIndeces, maxHoldout = 0) {
+	totalLength = length(train_in[,1])
+	print(sprintf("totalLength: %s",totalLength))
+	print(sprintf("trainLength: %s",length(trainIndeces)))
+	
+	trainData <- train_in[trainIndeces,]
+	holdoutData <- train_in[-trainIndeces,]	
+	if(0 != maxHoldout)
+		holdoutData <- holdoutData[1:maxHoldout,]
+	sysTime <- system.time(modelFit <- train(classe ~., method=method_in,na.action = na.omit, data=trainData))
+	print(sysTime)
+	predictTrain <- predict(modelFit,trainData)	
+	predictHoldout <- predict(modelFit,holdoutData)
+	
+	print(sprintf("holdoutLength: %s",length(predictHoldout)))
+	#print(length(holdoutData$classe))
+	
+	# Calculate accuracies
+	accTrain <- sum(as.numeric(predictTrain == trainData$classe)) / length(trainIndeces)
+	accHoldout <- sum(as.numeric(predictHoldout == holdoutData$classe)) / length(holdoutData$classe)
+	
+	return(list("accTrain" = accTrain, 
+		    "accHoldout" = accHoldout,
+		    "modelFit" = modelFit, 
+		    "trainData" = trainData))
+}
+
+# Function to find the maximum occurance character in a character vector
+findMaxCharOccurance <- function(charVector) {
+	tmp <- table(charVector)
+	return (names(tmp[tmp == max(tmp)]))
+}
+
+pml_write_files = function(x){
+	n = length(x)
+	for(i in 1:n){
+		filename = paste0("problem_id_",i,".txt")
+		write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+	}
+}
+
+# Read raw data
+rawData <- readDataF()
+# Preprocess raw data
+preprocData <- preprocessDataF(rawData)
+
+# uncomment the following lines for the time consuming execution
+#kFold <- kFoldF('rpart',preprocData, 3, 6000, F)
+#pml_write_files(kFold$predictTest[4,])
+```
+## Results
+
+The following time (~2 hours) and memory (~4GB) consuming runs were conducted for prediction of the test set. Accuracies measurment on the hold out set indicate that the Random Forest algorithm performed the best:
+
+<center>
+<table border="1" cellpadding="6">
+  <tr align="center|center|center|center">
+    <th colspan="2"></th>  
+    <th colspan="2">Random Forest</th>
+    <th colspan="2">Stoch. Gradient Boost</th>
+  </tr>
+  <tr align="center|center|center|center|center|center">
+    <th># runs</th>
+    <th>Fold size</th>
+    <th>accuracy</th>
+    <th>stdev</th>
+    <th>accuracy</th>
+    <th>stdev</th>    
+  </tr>  
+  <tr align="center|center|center|center">
+    <td align="center">20</td>
+    <td align="center">950</td>
+    <td align="center">0.9041</td>
+    <td align="center">0.0836</td>    
+    <td align="center" colspan="2">Not Run</td>     
+  </tr>
+  <tr align="center|center|center|center">
+    <td align="center">3</td>
+    <td align="center">6000</td>
+    <td align="center">0.9813</td>
+    <td align="center">0.021</td>  
+    <td align="center" colspan="2">Machine run out of memory</td>       
+  </tr> 
+  <tr align="center|center|center|center">
+    <td align="center">30</td>
+    <td align="center">600</td>
+    <td align="center" colspan="2">Not Run</td>   
+    <td align="center">0.853</td>  
+    <td align="center">0.00867</td>      
+  </tr>   
+</table> 
+</center>
+
+## Conclusion
+The Random Forest algorithm (3 runs 6000 traning size case) predicted the same value for each of the three runs for all 20 test cases. This proved to be the correct result. Nevertheless in 4 of the 20 cases not the result from this run was submitted beacuse all of the other run uniformly predicted a different value. These values were wrong and the secons submission proved that values from Random Forest experiments are the correct ones.
+
+
+<br>
+
+<br>
+
+<br>
+
+<br>
